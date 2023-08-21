@@ -1,5 +1,7 @@
 # wfs-Transaction
-*See also https://github.com/kstarmango/wfsT-library*
+*See also 
+https://github.com/kstarmango/wfsT-library
+https://github.com/mangosystem/ol-editor-wfst*
 
 ## Usage
 
