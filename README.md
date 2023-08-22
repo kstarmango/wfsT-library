@@ -24,7 +24,7 @@ t.submitTransact(mode, feature, layerName)
   t.submitMultiTransact(editedItems_)
 
 // 3. data cleanup
-const res = t.setEditedItems();
+const res = await t.setEditedItems();
 if(res){
   cleanup();
 }

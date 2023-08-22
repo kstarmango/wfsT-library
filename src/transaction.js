@@ -47,15 +47,11 @@ export default class WfsTransaction {
 
 	/**
 	 * transact call create and serialize
-	 * @param {string} mode - insert, update, delete
+	 * @param {string} type - insert, update, delete
 	 * @param {feature} feature
 	 * @param {layerName} layerName
 	 */
-	createTransact(mode, feature, layerName) {
-		if (feature.getGeometryName() !== 'geom') {
-			feature.setGeometryName('geom');
-		}
-
+	createTransact(type, feature, layerName) {
 		const formatWFS = new WFS();
 
 		let formatGML = new GML({
@@ -66,7 +62,7 @@ export default class WfsTransaction {
 
 		let node = null;
 
-		switch (mode) {
+		switch (type) {
 			case 'insert':
 				node = formatWFS.writeTransaction([feature], null, null, formatGML);
 				break;
@@ -80,44 +76,51 @@ export default class WfsTransaction {
 				break;
 		}
 
-		const dataStr = new XMLSerializer().serializeToString(node);
+		let dataStr = new XMLSerializer().serializeToString(node);
+
+		if (dataStr.indexOf('geometry') !== -1) {
+			dataStr = dataStr.replace(/geometry/gi, 'geom');
+		}
 
 		return dataStr;
 	}
 
 	/**
 	 * single transact call
-	 * @param {string} mode - insert, update, delete
+	 * @param {string} type - insert, update, delete
 	 * @param {feature} feature
 	 * @param {layerName} layerName
 	 */
-	submitTransact(mode, feature, layerName) {
-		const createWfstXml = this.createTransact(mode, feature, layerName);
-		return this.post(createWfstXml);
+	submitTransact(type, feature, layerName) {
+		const createWfstXml = this.createTransact(type, feature, layerName);
+		const res = this.postRequest(createWfstXml);
+
+		if (res) {
+			this.editedItems = [];
+			return res;
+		}
 	}
 
 	setEditedItems(editItems) {
 		return (this.editedItems = editItems);
 	}
 
-	addEditedItems(mode, feature, layerName) {
+	addEditedItems(type, feature, layerName) {
 		return this.editedItems.push({
-			mode: mode,
+			type: type,
 			feature: feature,
 			layerName: layerName,
 		});
 	}
 
 	/**
-	 * @param {editedItems_} {[ mode, feature, layerName ]}
+	 * @param {editedItems_} [{ type, feature, layerName }]
 	 * @return post res
 	 */
 	submitMultiTransact(editedItems_) {
 		let editedItems;
 
-		if (this.editedItems) {
-			editedItems = this.editedItems;
-		} else if (editedItems_) {
+		if (editedItems_) {
 			editedItems = editedItems_;
 		}
 
@@ -136,8 +139,8 @@ export default class WfsTransaction {
 			);
 
 			for (let item of edited) {
-				const createWfstXml = this.createTransactWFS(
-					item.mode,
+				const createWfstXml = this.createTransact(
+					item.type,
 					item.feature,
 					item.layerName
 				);
@@ -162,21 +165,26 @@ export default class WfsTransaction {
 			}
 		}
 
-		let requestWfstXml = dom2str(convertWfstXml.children[0]);
-		const res = this.post(requestWfstXml);
-		if (res) {
-			this.editedItems = [];
-			return res;
+		if (convertWfstXml !== null) {
+			let requestWfstXml = dom2str(convertWfstXml.children[0]);
+			const res = this.postRequest(requestWfstXml);
+
+			if (res) {
+				this.editedItems = [];
+				return res;
+			}
 		}
 	}
 
-	post(requestWfstXml) {
-		axios
+	postRequest(requestWfstXml) {
+		return axios
 			.post(this.url, requestWfstXml, {
 				headers: { 'Content-Type': 'text/xml' },
 			})
 			.then((res) => {
-				return res;
+				if (res.status === 200) {
+					return res.data;
+				}
 			})
 			.catch((err) => {
 				console.log(err);
