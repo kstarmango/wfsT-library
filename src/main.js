@@ -1,3 +1,9 @@
 import WfsTransaction from './transaction'
+import WfsEditor from './editor';
+import Common from './common'
 
-export default WfsTransaction
+export { 
+  WfsTransaction, 
+  WfsEditor, 
+  Common 
+}

@@ -1,13 +1,3 @@
-/** 
-Create wfs-transaction call for OpenLayers
-
-@module mango/wfs-transaction
-@author Hyeokjin Kim <kstarmango@gmail.com>
-@version 0.1.0
-@license MIT
-@copyright (c) MangoSystem
-*/
-
 import { WFS, GML } from 'ol/format';
 import axios from 'axios';
 import dom2str from 'dom-to-string';
@@ -15,6 +5,8 @@ import parseXML from 'xml-parse-from-string';
 
 export default class WfsTransaction {
 	/**
+	 * 
+	 * sdfsdfsdf
 	 * @param {options} options - url, featureNS, srsName
 	 */
 	constructor(options) {
