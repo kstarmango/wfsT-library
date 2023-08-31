@@ -51,7 +51,7 @@ function eventTrigger(){
 
 
 * **simplify**: (`feature` : `ol/Feature`, `option` : `tolerance options`) => `void`
-`[tolerance options](https://turfjs.org/docs/#simplify)` 
+[tolerance options](https://turfjs.org/docs/#simplify)
 
 
 * **reflect**: (`feature` : `ol/Feature`, `axis` : `String`) => `void`
