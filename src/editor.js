@@ -205,7 +205,6 @@ export default class WfsEditor extends Common {
    * @param axis 'short or long' 
 	 */
 	reflect(feature = Feature, axis = '') {
-		const beforeFeature = feature.clone();
 
 		const featureGeom = {
 			type: feature.getGeometry().getType(),
@@ -332,7 +331,7 @@ export default class WfsEditor extends Common {
 	/** 
 	 * @purpose 다중 포인트 중심점 생성 (포인트들의 가운데 지점으로 병합)
 	 */
-	midPointAdd(features = [Feature], source = VectorSource) {
+	addMidPoint(features = [Feature], source = VectorSource) {
 		let coords = [];
     let modifiedFeature;
 
@@ -430,6 +429,7 @@ export default class WfsEditor extends Common {
 		const geoJson = new GeoJSON();
 
 		if (this.checkType(features)) {
+
 			if (features[0].getGeometry().getType() === 'Point') {
 				for (let i = 0; i < features.length; i++) {
 					coords.push(features[i].getGeometry().getCoordinates());
@@ -439,7 +439,6 @@ export default class WfsEditor extends Common {
 				const newPoint = new Feature(new MultiPoint(coords));
 				const prop = this.getClonedFeatureProp(features[0], newPoint);
 				newPoint.setProperties(prop);
-
 				source.addFeature(newPoint);
 			}
 
@@ -649,6 +648,7 @@ export default class WfsEditor extends Common {
 					}
 				}
 			}
+
 		}
 	}
 
@@ -715,6 +715,7 @@ export default class WfsEditor extends Common {
 
     let select;
     let newFeatures = [];
+    const type = feature.getGeometry().getType();
 
 		this.map.getInteractions().getArray().forEach(function (interaction) {
 			if (interaction instanceof Select) {
@@ -725,17 +726,17 @@ export default class WfsEditor extends Common {
 
 		const drawEvent = new Draw({ geometryName: 'geom', type: 'LineString' });
 
-		const targetLine = new Feature(
-			new LineString(feature.getGeometry().getCoordinates()[0])
-		);
+    const featureGeom = type.indexOf('Multi') !== -1 
+      ? new LineString(feature.getGeometry().getCoordinates()[0])
+      : new LineString(feature.getGeometry().getCoordinates());
 
-		if (feature.getGeometry().getType() === 'LineString'){};
+		const targetLine = new Feature(featureGeom);
 
-		if (feature.getGeometry().getType() === 'MultiLineString') {
+    if(l1 !== null){
+      drawEvent.on('drawstart', l1);
+    }
 
-      if(l1 !== null){
-        drawEvent.on('drawstart', l1)
-      }
+		if (type.indexOf('LineString') !== -1){
 
 			drawEvent.on('drawend', function (e) {
 				const geoJson = new GeoJSON();
@@ -745,19 +746,35 @@ export default class WfsEditor extends Common {
 				const intersect = lineSplit(target, splitLine);
 
 				if (intersect.features.length > 1) {
-					for (let i = 0; i < intersect.features.length; i++) {
+
+          for (let i = 0; i < intersect.features.length; i++) {
 						if (i === 0) {
 							const newGeom = intersect.features[0].geometry.coordinates;
-							feature.setGeometry(new MultiLineString([newGeom]));
-						} else {
-							const addGeom = intersect.features[i].geometry.coordinates;
-							const addFeature = new Feature(new MultiLineString([addGeom]));
 
-							const newProp = this.getClonedFeatureProp(feature, addFeature);
-              
-							addFeature.setProperties(newProp);
-							source.addFeature(addFeature);
-							newFeatures.push(addFeature);
+              if(type.indexOf('Multi') !== -1){
+							  feature.setGeometry(new MultiLineString([newGeom]));
+              } else {
+							  feature.setGeometry(new LineString(newGeom));
+              }
+
+            } else {
+							const addGeom = intersect.features[i].geometry.coordinates;
+
+              let addFeature;
+
+              if(type.indexOf('Multi') !== -1){
+							  addFeature = new Feature(new MultiLineString([addGeom]));
+              } else {
+                addFeature = new Feature(new LineString(addGeom));
+              }
+
+              if(addFeature){
+                const newProp = this.getClonedFeatureProp(feature, addFeature);
+                
+                addFeature.setProperties(newProp);
+                source.addFeature(addFeature);
+                newFeatures.push(addFeature);
+              }
 						}
 
             if(select){
@@ -772,19 +789,9 @@ export default class WfsEditor extends Common {
 
 				this.map.removeInteraction(drawEvent);
 			}.bind(this));
-			this.map.addInteraction(drawEvent);
 		}
 
-		if (feature.getGeometry().getType() === 'Polygon') {
-		}
-
-		if (feature.getGeometry().getType() === 'MultiPolygon') {
-
-      drawEvent.on('drawstart', function (e) {
-        if(l1){
-          l1(e);
-        }
-      })
+		if (type.indexOf('Polygon') !== -1) {
 
 			drawEvent.on('drawend', function (e) {
 				const reader = new GeoJSONReader();
@@ -812,32 +819,36 @@ export default class WfsEditor extends Common {
 						const readGeom = geoJson.readGeometry(
 							writer.write(polygons.array[i])
 						);
+              
+            const geom = type.indexOf('Multi') !== -1
+              ? new MultiPolygon([readGeom.getCoordinates()])
+              : new Polygon(readGeom.getCoordinates());
 
 						if (i === 0) {
-							feature.setGeometry(
-								new MultiPolygon([readGeom.getCoordinates()])
-							);
+							feature.setGeometry(geom);
 						} else {
-							const newFeature = new Feature(
-								new MultiPolygon([readGeom.getCoordinates()])
-							);
+							const newFeature = new Feature(geom);
 							const newProp = this.getClonedFeatureProp(feature, newFeature);
 							newFeature.setProperties(newProp);
 							source.addFeature(newFeature);
-              newFeatures.push(newFeature)
-
-							l2(e, newFeatures);
+              newFeatures.push(newFeature);
 						}
 					}
 				} else {
-					alert('분할할 피쳐가 없습니다.');
+          alert('분할할 피쳐가 없습니다.');
 				}
+        
+        if(newFeatures.length > 0){
+          l2(e, newFeatures);
+        }
 
 				this.map.removeInteraction(drawEvent);
         select.setActive(true);
 			}.bind(this));
 			this.map.addInteraction(drawEvent);
 		}
+
+    this.map.addInteraction(drawEvent);
 
     return newFeatures
 	}

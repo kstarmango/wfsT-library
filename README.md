@@ -57,7 +57,7 @@ function eventTrigger(){
 * **reflect**: (`feature` : `ol/Feature`, `axis` : `String`) => `void`
 
 
-* **midPointAdd**: (`features` : `ol/Feature[]`, `source` : `ol/VectorSource`) => `addedFeature : ol/Feature`
+* **addMidPoint**: (`features` : `ol/Feature[]`, `source` : `ol/VectorSource`) => `addedFeature : ol/Feature`
 
 
 * **merge**: (`features` : `ol/Feature[]`, `source` : `ol/VectorSource`) => `void`
