@@ -17,7 +17,7 @@ export default {
 			'jsts',
 			'ol-rotate-feature',
 			'@turf/turf',
-			// 외부 라이브러리 처리는 여기에 절대 dev dependency에 처리하지 말자 제발!!!!!
+			// 외부 라이브러리 처리는 여기에
 		]
 	},
 	plugins: [

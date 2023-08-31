@@ -64,11 +64,11 @@ export default class WfsEditor extends Common {
 
 		this.map.addInteraction(this._translate);
 
-		this._translate.on('translatestart', l1);
+		this._translate.on('translatestart', (e) => l1(e));
 
 		this._translate.on('translateend', (e) => {
 			this.map.removeInteraction(this._translate);
-			l2;
+			l2(e);
 		});
 	}
 
@@ -83,7 +83,7 @@ export default class WfsEditor extends Common {
 
 		const centroidPoint = centroid(featureGeom);
 
-		const createRotateStyle = () => {
+		const createDefaultRotateStyle = () => {
 			let styles = {
 				anchor: [],
 				arrow: [],
@@ -109,13 +109,12 @@ export default class WfsEditor extends Common {
 			features: features,
 			anchor: centroidPoint.geometry.coordinates,
 			angle: (-90 * Math.PI) / 180,
-			style: style || createRotateStyle(),
+			style: style !== null ? style : createDefaultRotateStyle(),
 		});
 
 		this.map.addInteraction(rotate);
 
 		rotate.on('rotatestart', l1);
-
 		rotate.on('rotateend', l2);
 	}
 
@@ -203,6 +202,7 @@ export default class WfsEditor extends Common {
 
 	/** 
 	 * @purpose 짧은 축, 긴축 기준 뒤집기
+   * @param axis 'short or long' 
 	 */
 	reflect(feature = Feature, axis = '') {
 		const beforeFeature = feature.clone();
@@ -326,16 +326,6 @@ export default class WfsEditor extends Common {
 			const affineGeoJson = geoJson.readGeometry(writer.write(affineGeom));
 			feature.setGeometry(affineGeoJson);
 
-			const modifiedFeature = feature;
-			beforeFeature.setId(modifiedFeature.getId());
-
-			const edited = saveList.setUpdateEdit(
-				map,
-				curLyrName,
-				modifiedFeature,
-				beforeFeature
-			);
-			addUndoList(edited);
 		}
 	}
 
@@ -344,6 +334,7 @@ export default class WfsEditor extends Common {
 	 */
 	midPointAdd(features = [Feature], source = VectorSource) {
 		let coords = [];
+    let modifiedFeature;
 
 		if (this.checkType(features)) {
 			if (features[0].getGeometry().getType() === 'Point') {
@@ -369,7 +360,7 @@ export default class WfsEditor extends Common {
 				};
 
 				let centroidPoint = centroid(featureGeom);
-				const modifiedFeature = new Feature(
+				modifiedFeature = new Feature(
 					new Point(centroidPoint.geometry.coordinates)
 				);
 
@@ -423,6 +414,8 @@ export default class WfsEditor extends Common {
 
 				source.addFeature(modifiedFeature);
 			}
+
+      return modifiedFeature
 		}
 	}
 
@@ -663,6 +656,9 @@ export default class WfsEditor extends Common {
 	 * @purpose 피쳐 분할
 	 */
 	split(feature = Feature, source = VectorSource) {
+
+    let newFeatures = [];
+
 		if (feature.getGeometry().getType() === 'MultiPoint') {
 			const coords = feature.getGeometry().getCoordinates();
 
@@ -672,6 +668,7 @@ export default class WfsEditor extends Common {
 
 				newFeature.setProperties(newProp);
 				source.addFeature(newFeature);
+        newFeatures.push(newFeature);
 			}
 
 			feature.setGeometry(new MultiPoint(coords[0]));
@@ -686,6 +683,7 @@ export default class WfsEditor extends Common {
 
 				newFeature.setProperties(newProp);
 				source.addFeature(newFeature);
+        newFeatures.push(newFeature);
 			}
 
 			feature.setGeometry(new MultiLineString([coords[0]]));
@@ -700,18 +698,23 @@ export default class WfsEditor extends Common {
 
 				newFeature.setProperties(newProp);
 				source.addFeature(newFeature);
+        newFeatures.push(newFeature);
 			}
 
 			feature.setGeometry(new MultiPolygon([coords[0]]));
 		}
+
+    return newFeatures;
 	}
 
 	/**
 	 * @purpose 선을 그려 도형 자르기
+   * @param l2 (e, newFeatures) => {} // created feature pieces
 	 */
-	crop(feature = Feature, source = VectorSource, l = (e) => {}) {
+	crop(feature = Feature, source = VectorSource, l1 = (e) => {} , l2 = (e, newFeatures) => {}) {
 
     let select;
+    let newFeatures = [];
 
 		this.map.getInteractions().getArray().forEach(function (interaction) {
 			if (interaction instanceof Select) {
@@ -726,13 +729,15 @@ export default class WfsEditor extends Common {
 			new LineString(feature.getGeometry().getCoordinates()[0])
 		);
 
-		if (feature.getGeometry().getType() === 'LineString'){
-		};
+		if (feature.getGeometry().getType() === 'LineString'){};
 
 		if (feature.getGeometry().getType() === 'MultiLineString') {
 
+      if(l1 !== null){
+        drawEvent.on('drawstart', l1)
+      }
+
 			drawEvent.on('drawend', function (e) {
-				const newFeatures = [];
 				const geoJson = new GeoJSON();
 				const target = geoJson.writeFeatureObject(targetLine);
 				const splitLine = geoJson.writeFeatureObject(e.feature);
@@ -756,11 +761,10 @@ export default class WfsEditor extends Common {
 						}
 
             if(select){
-              select.getFeatures().push(feature);
               select.setActive(true);
             }
 
-						l;
+						l2(e, newFeatures);
 					}
 				} else {
 					alert('분할할 피쳐가 없습니다.');
@@ -775,6 +779,13 @@ export default class WfsEditor extends Common {
 		}
 
 		if (feature.getGeometry().getType() === 'MultiPolygon') {
+
+      drawEvent.on('drawstart', function (e) {
+        if(l1){
+          l1(e);
+        }
+      })
+
 			drawEvent.on('drawend', function (e) {
 				const reader = new GeoJSONReader();
 				const writer = new GeoJSONWriter();
@@ -813,8 +824,9 @@ export default class WfsEditor extends Common {
 							const newProp = this.getClonedFeatureProp(feature, newFeature);
 							newFeature.setProperties(newProp);
 							source.addFeature(newFeature);
+              newFeatures.push(newFeature)
 
-							l(e, newFeatures);
+							l2(e, newFeatures);
 						}
 					}
 				} else {
@@ -822,9 +834,12 @@ export default class WfsEditor extends Common {
 				}
 
 				this.map.removeInteraction(drawEvent);
-			});
+        select.setActive(true);
+			}.bind(this));
 			this.map.addInteraction(drawEvent);
 		}
+
+    return newFeatures
 	}
 
 	/** 
@@ -832,51 +847,55 @@ export default class WfsEditor extends Common {
 	 */
 	lineNodeSplit(features = [Feature], source = VectorSource) {
 
-    
+    let select;
+    let addFeatures = [];
+
+    this.map.getInteractions().getArray().forEach(function (interaction) {
+			if (interaction instanceof Select) {
+        select = interaction;
+			}
+		});
+
     for (let feature of features) {
+      const entireCoords = feature.getGeometry().getCoordinates(); 
 
-      let coords = null;
+      entireCoords.forEach((coords, idx) => {
+        // coordinate가 2개 이상 (노드가 2개 이상이면)
+        for (let i = 0; i < coords.length; i++) {
 
-			// 선택 피쳐 coordinates
-			if (feature.getGeometry().getType().indexOf('Multi') !== -1) {
-				coords = feature.getGeometry().getCoordinates()[0];
-			} else {
-				coords = feature.getGeometry().getCoordinates();
-			}
+          let newFeature;
 
-			// coordinate가 2개 이상 (노드가 2개 이상이면)
-			if (coords.length > 2) {
-				for (let i = 0; i < coords.length; i++) {
-					if (i === 0) {
-						const coord = coords.slice(i, i + 2);
-						const geom = feature.getGeometry();
-						if (feature.getGeometry().getType().indexOf('Multi') !== -1) {
-							geom.setCoordinates([coord]);
-						} else {
-							geom.setCoordinates(coord);
-						}
-						feature.setGeometry(geom);
-					} else {
-						const coord = coords.slice(i, i + 2);
-						let newFeature = null;
+          if (coords.length > 2) {
+            const coord = coords.slice(i, i + 2);
 
-						if (feature.getGeometry().getType().indexOf('Multi') !== -1) {
-							newFeature = new Feature(new MultiLineString([coord]));
-						} else {
-							newFeature = new Feature(new LineString(coord));
-						}
-
-            const newProp = this.getClonedFeatureProp(feature, newFeature);
-            newFeature.setProperties(newProp);
+            if(feature.getGeometry().getType().indexOf('Multi') !== -1){
+              newFeature = new Feature(new MultiLineString([coord]));
+            } else {
+              newFeature = new Feature(new LineString(coord));
+            }
             
-            if (coord.length > 1) {
+            const beforeProp = this.getClonedFeatureProp(feature, newFeature)
+            newFeature.setProperties(beforeProp);
+
+            if(coord.length > 1){
               source.addFeature(newFeature);
+              addFeatures.push(newFeature);
             }            
-					}
-				}
-			} else {
-				alert('분할피쳐 없음');
-			}
+
+            if(select && idx === 0 && i === 0){
+              select.getFeatures().clear();
+              select.getFeatures().push(newFeature);
+            }
+
+          } 
+        }  
+      })
 		}
+
+    if(!addFeatures.length > 0){
+      alert('분할 피쳐 없음')
+    }
+
+    return addFeatures
 	}
 }
